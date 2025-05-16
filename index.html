@@ -2,84 +2,165 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Secret Flower</title>
+  <title>Password Protected Jungle Geranium Flower</title>
   <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      background: #f0fff0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
+      background: linear-gradient(135deg, #1a1a1a, #0d0d0d);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-family: Arial, sans-serif;
     }
-    #passwordContainer {
-      text-align: center;
+    #passwordForm {
+      background: rgba(0,0,0,0.7); padding: 20px 30px; border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.5); text-align: center;
     }
-    #flowerCanvas {
-      display: none;
-      margin-top: 20px;
-      border: 2px solid #444;
-      background: #fff;
+    #passwordForm input {
+      padding: 10px; font-size: 1em; border: none; border-radius: 5px; margin-right: 10px;
     }
-    input[type="password"] {
-      padding: 8px;
-      font-size: 16px;
+    #passwordForm button {
+      padding: 10px 20px; font-size: 1em; border: none; border-radius: 5px;
+      background: #c03; color: #fff; cursor: pointer;
     }
-    button {
-      padding: 8px 16px;
-      font-size: 16px;
-      margin-left: 10px;
+    #passwordForm button:hover { background: #e33; }
+    canvas {
+      display: none; background: transparent;
     }
   </style>
 </head>
 <body>
-  <div id="passwordContainer">
-    <h2>Enter the secret password</h2>
-    <input type="password" id="passwordInput" placeholder="Password">
-    <button onclick="checkPassword()">Submit</button>
-  </div>
-
-  <canvas id="flowerCanvas" width="400" height="400"></canvas>
+  <form id="passwordForm">
+    <div><label for="pwd">Enter Password:</label></div>
+    <div><input type="password" id="pwd" /></div>
+    <div><button id="submitBtn">Submit</button></div>
+  </form>
+  <canvas id="flowerCanvas" width="600" height="600"></canvas>
 
   <script>
-    function checkPassword() {
-      const input = document.getElementById("passwordInput").value;
-      if (input === "bangladesh") {
-        document.getElementById("passwordContainer").style.display = "none";
-        document.getElementById("flowerCanvas").style.display = "block";
-        drawFlower();
-      } else {
-        alert("Wrong password!");
-      }
+  (function() {
+    const correctPassword = "bangladesh";
+    const form = document.getElementById('passwordForm');
+    const pwdInput = document.getElementById('pwd');
+    const canvas = document.getElementById('flowerCanvas');
+    const ctx = canvas.getContext('2d');
+    const cw = canvas.width, ch = canvas.height;
+    let animationFrameId;
+
+    // Generate flower positions on a sphere for depth
+    const flowers = [];
+    const flowerCount = 20;
+    const sphereRadius = 100;
+    const viewerDistance = 300;
+    const centerX = cw / 2, centerY = ch / 2;
+    // Light direction (top-left)
+    const sunDir = (() => {
+      const v = {x:-1, y:-1};
+      const len = Math.hypot(v.x, v.y);
+      return { x: v.x/len, y: v.y/len };
+    })();
+
+    // Uniform random points on sphere
+    function randomSphere() {
+      const u = Math.random(), v = Math.random();
+      const theta = 2 * Math.PI * u;
+      const phi = Math.acos(2 * v - 1);
+      const x = sphereRadius * Math.sin(phi) * Math.cos(theta);
+      const y = sphereRadius * Math.sin(phi) * Math.sin(theta);
+      const z = sphereRadius * Math.cos(phi);
+      return {x, y, z};
     }
 
-    function drawFlower() {
-      const canvas = document.getElementById("flowerCanvas");
-      const ctx = canvas.getContext("2d");
-      const cx = canvas.width / 2;
-      const cy = canvas.height / 2;
-      const petals = 18;
-      const radius = 100;
+    for (let i = 0; i < flowerCount; i++) {
+      const p = randomSphere();
+      // Perspective projection factor
+      const scale = viewerDistance / (viewerDistance - p.z);
+      const px = p.x * scale, py = p.y * scale;
+      // Compute brightness from dot(light, position)
+      let brightness = 1.0;
+      const len = Math.hypot(p.x, p.y);
+      if (len > 0) {
+        const dot = (p.x/len)*sunDir.x + (p.y/len)*sunDir.y;
+        brightness = 0.8 + 0.4 * (dot + 1) / 2;
+      }
+      flowers.push({px, py, z: p.z, scale, brightness});
+    }
+    // Add one flower exactly at front
+    const frontZ = sphereRadius;
+    const frontScale = viewerDistance / (viewerDistance - frontZ);
+    flowers.push({px:0, py:0, z:frontZ, scale:frontScale, brightness:1.2});
+    // Sort by depth (back first)
+    flowers.sort((a,b) => a.z - b.z);
 
-      for (let i = 0; i < petals; i++) {
-        const angle = (i * 2 * Math.PI) / petals;
-        const x = cx + Math.cos(angle) * radius;
-        const y = cy + Math.sin(angle) * radius;
-
+    // Draw one flower at (cx,cy) with given scale and brightness
+    const basePetalLength = 30, basePetalWidth = 10, baseCenterRadius = 6;
+    function drawFlowerAt(cx, cy, scale, brightness) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+      // Petal color in HSL (red hue=0), adjust lightness by brightness
+      const baseLight = 50;
+      const petalLight = Math.min(80, Math.max(30, baseLight * brightness));
+      ctx.fillStyle = `hsl(0, 100%, ${petalLight}%)`;
+      // Draw 4 petals by rotating
+      for (let i = 0; i < 4; i++) {
+        ctx.save();
+        ctx.rotate((Math.PI/2) * i);
         ctx.beginPath();
-        ctx.ellipse(x, y, 30, 60, angle, 0, 2 * Math.PI);
-        ctx.fillStyle = `hsl(${(i * 360) / petals}, 80%, 60%)`;
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(basePetalLength*0.5, -basePetalWidth, basePetalLength, 0);
+        ctx.quadraticCurveTo(basePetalLength*0.5, basePetalWidth, 0, 0);
         ctx.fill();
+        ctx.restore();
       }
-
-      // Center
+      // Draw center stamen with radial gradient
+      const baseHueC = 50, baseSatC = 100, baseLightC = 60;
+      const centerLight = Math.min(90, Math.max(40, baseLightC * brightness));
+      const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, baseCenterRadius);
+      grad.addColorStop(0, `hsl(${baseHueC}, ${baseSatC}%, 100%)`);
+      grad.addColorStop(1, `hsl(${baseHueC}, ${baseSatC}%, ${centerLight}%)`);
       ctx.beginPath();
-      ctx.arc(cx, cy, 30, 0, 2 * Math.PI);
-      ctx.fillStyle = "orange";
+      ctx.fillStyle = grad;
+      ctx.arc(0, 0, baseCenterRadius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
+
+    // Draw the entire scene (clear, transform, draw all flowers)
+    let t = 0;
+    function drawScene(angle) {
+      // Clear to black
+      ctx.save();
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.restore();
+      // Move origin to center and rotate
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(angle);
+      for (const f of flowers) {
+        drawFlowerAt(f.px, f.py, f.scale, f.brightness);
+      }
+      ctx.restore();
+    }
+    function animate() {
+      t += 0.01;
+      drawScene(t);
+      animationFrameId = requestAnimationFrame(animate);
+    }
+
+    // Handle form submission
+    document.getElementById('submitBtn').addEventListener('click', function(e) {
+      e.preventDefault();
+      if (pwdInput.value === correctPassword) {
+        form.style.display = 'none';
+        canvas.style.display = 'block';
+        animate();
+      } else {
+        alert('Incorrect password.');
+        pwdInput.value = '';
+      }
+    });
+  })();
   </script>
 </body>
 </html>
