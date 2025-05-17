@@ -37,7 +37,7 @@
 
   <script>
   (function() {
-    const correctPassword = "bangladesh";
+    const correctPassword = "Audri";
     const form = document.getElementById('passwordForm');
     const pwdInput = document.getElementById('pwd');
     const canvas = document.getElementById('flowerCanvas');
@@ -45,20 +45,21 @@
     const cw = canvas.width, ch = canvas.height;
     let animationFrameId;
 
-    // Generate flower positions on a sphere for depth
-    const flowers = [];
-    const flowerCount = 20;
+    const centerX = cw / 2, centerY = ch / 2;
     const sphereRadius = 100;
     const viewerDistance = 300;
-    const centerX = cw / 2, centerY = ch / 2;
-    // Light direction (top-left)
     const sunDir = (() => {
       const v = {x:-1, y:-1};
       const len = Math.hypot(v.x, v.y);
       return { x: v.x/len, y: v.y/len };
     })();
 
-    // Uniform random points on sphere
+    // Generate all flower positions first
+    const allFlowers = [];
+    const visibleFlowers = [];
+    const flowerCount = 60;
+    const delayBetweenFlowers = 200;
+
     function randomSphere() {
       const u = Math.random(), v = Math.random();
       const theta = 2 * Math.PI * u;
@@ -71,36 +72,34 @@
 
     for (let i = 0; i < flowerCount; i++) {
       const p = randomSphere();
-      // Perspective projection factor
       const scale = viewerDistance / (viewerDistance - p.z);
       const px = p.x * scale, py = p.y * scale;
-      // Compute brightness from dot(light, position)
       let brightness = 1.0;
       const len = Math.hypot(p.x, p.y);
       if (len > 0) {
         const dot = (p.x/len)*sunDir.x + (p.y/len)*sunDir.y;
         brightness = 0.8 + 0.4 * (dot + 1) / 2;
       }
-      flowers.push({px, py, z: p.z, scale, brightness});
+      allFlowers.push({px, py, z: p.z, scale, brightness});
     }
-    // Add one flower exactly at front
-    const frontZ = sphereRadius;
-    const frontScale = viewerDistance / (viewerDistance - frontZ);
-    flowers.push({px:0, py:0, z:frontZ, scale:frontScale, brightness:1.2});
-    // Sort by depth (back first)
-    flowers.sort((a,b) => a.z - b.z);
+    allFlowers.push({
+      px: 0, py: 0, z: sphereRadius,
+      scale: viewerDistance / (viewerDistance - sphereRadius),
+      brightness: 1.2
+    });
+    allFlowers.sort((a, b) => a.z - b.z);
 
-    // Draw one flower at (cx,cy) with given scale and brightness
     const basePetalLength = 30, basePetalWidth = 10, baseCenterRadius = 6;
+
     function drawFlowerAt(cx, cy, scale, brightness) {
       ctx.save();
       ctx.translate(cx, cy);
       ctx.scale(scale, scale);
-      // Petal color in HSL (red hue=0), adjust lightness by brightness
+
       const baseLight = 50;
       const petalLight = Math.min(80, Math.max(30, baseLight * brightness));
       ctx.fillStyle = `hsl(0, 100%, ${petalLight}%)`;
-      // Draw 4 petals by rotating
+
       for (let i = 0; i < 4; i++) {
         ctx.save();
         ctx.rotate((Math.PI/2) * i);
@@ -111,7 +110,7 @@
         ctx.fill();
         ctx.restore();
       }
-      // Draw center stamen with radial gradient
+
       const baseHueC = 50, baseSatC = 100, baseLightC = 60;
       const centerLight = Math.min(90, Math.max(40, baseLightC * brightness));
       const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, baseCenterRadius);
@@ -124,37 +123,48 @@
       ctx.restore();
     }
 
-    // Draw the entire scene (clear, transform, draw all flowers)
     let t = 0;
     function drawScene(angle) {
-      // Clear to black
       ctx.save();
       ctx.setTransform(1,0,0,1,0,0);
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, cw, ch);
       ctx.restore();
-      // Move origin to center and rotate
+
       ctx.save();
       ctx.translate(centerX, centerY);
       ctx.rotate(angle);
-      for (const f of flowers) {
+      for (const f of visibleFlowers) {
         drawFlowerAt(f.px, f.py, f.scale, f.brightness);
       }
       ctx.restore();
     }
+
     function animate() {
       t += 0.01;
       drawScene(t);
       animationFrameId = requestAnimationFrame(animate);
     }
 
-    // Handle form submission
+    function startGradualBloom() {
+      let i = 0;
+      const interval = setInterval(() => {
+        if (i < allFlowers.length) {
+          visibleFlowers.push(allFlowers[i]);
+          i++;
+        } else {
+          clearInterval(interval);
+        }
+      }, delayBetweenFlowers);
+    }
+
     document.getElementById('submitBtn').addEventListener('click', function(e) {
       e.preventDefault();
       if (pwdInput.value === correctPassword) {
         form.style.display = 'none';
         canvas.style.display = 'block';
         animate();
+        startGradualBloom();
       } else {
         alert('Incorrect password.');
         pwdInput.value = '';
